@@ -2,8 +2,10 @@
  * Woodgrove Transfers HTTP API (optional). No dependencies: node server.js
  *
  *   GET  /health          → { status: 'ok' }
+ *   GET  /accounts        → Woodgrove accounts as { id, iban } with masked IBANs
  *   GET  /ibans/:iban     → validation details for one IBAN
- *   POST /transfers       → create a transfer from a JSON transfer request
+ *   POST /payee-check     → Verification of Payee for { iban, name }
+ *   POST /transfers       → create a transfer from a JSON transfer request (fromIban or fromAccountId)
  *   GET  /                → the transfer console (console/index.html)
  */
 'use strict';
@@ -14,12 +16,17 @@ const path = require('node:path');
 
 const iban = require('./src/iban');
 const { createTransfer } = require('./src/transfer');
+const { verifyPayee } = require('./src/payee');
+const accounts = require('./data/accounts');
 
 const PORT = Number(process.env.PORT) || 3000;
 const ROOT = __dirname;
 
-// Static files: the console, plus the data/ and src/ files it loads with <script> tags.
-const STATIC_DIRS = { '/': 'console', '/data/': 'data', '/src/': 'src' };
+// The account directory (IBAN → holder name) stays on the server. Clients get opaque ids and masked IBANs.
+const ACCOUNT_IDS = new Map(Object.keys(accounts).map((accountIban, index) => [`acc-${index + 1}`, accountIban]));
+
+// Static files: the console and the src/ files it loads with <script> tags. data/ is not served.
+const STATIC_DIRS = { '/': 'console', '/src/': 'src' };
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -47,7 +54,7 @@ function readBody(req) {
 }
 
 function serveStatic(req, res, pathname) {
-  const prefix = pathname.startsWith('/data/') ? '/data/' : pathname.startsWith('/src/') ? '/src/' : '/';
+  const prefix = pathname.startsWith('/src/') ? '/src/' : '/';
   const dir = path.join(ROOT, STATIC_DIRS[prefix]);
   const name = pathname === '/' ? 'index.html' : pathname.slice(prefix.length);
   const file = path.resolve(dir, name);
@@ -67,8 +74,17 @@ async function handle(req, res) {
     return sendJson(res, 200, { status: 'ok', service: 'woodgrove-transfers', time: new Date().toISOString() });
   }
 
+  if (req.method === 'GET' && pathname === '/accounts') {
+    return sendJson(res, 200, [...ACCOUNT_IDS].map(([id, accountIban]) => ({ id, iban: iban.maskIban(accountIban) })));
+  }
+
   if (req.method === 'GET' && pathname.startsWith('/ibans/')) {
-    const value = decodeURIComponent(pathname.slice('/ibans/'.length));
+    let value;
+    try {
+      value = decodeURIComponent(pathname.slice('/ibans/'.length));
+    } catch (error) {
+      return sendError(res, 400, 'INVALID_IBAN_PATH', 'The IBAN in the address could not be read.');
+    }
     const country = iban.countryOf(value);
     const maskedIban = iban.maskIban(value);
     return sendJson(res, 200, {
@@ -80,6 +96,18 @@ async function handle(req, res) {
     });
   }
 
+  if (pathname === '/payee-check') {
+    if (req.method !== 'POST') return sendError(res, 405, 'METHOD_NOT_ALLOWED', 'Use POST to check a payee name.');
+    let body;
+    try {
+      body = JSON.parse(await readBody(req));
+    } catch (error) {
+      return sendError(res, 400, 'INVALID_JSON', 'The request body must be JSON with an iban and a name.');
+    }
+    const check = body && typeof body === 'object' ? verifyPayee(body.iban, body.name) : null;
+    return sendJson(res, 200, { check });
+  }
+
   if (pathname === '/transfers') {
     if (req.method !== 'POST') return sendError(res, 405, 'METHOD_NOT_ALLOWED', 'Use POST to create a transfer.');
 
@@ -88,6 +116,11 @@ async function handle(req, res) {
       request = JSON.parse(await readBody(req));
     } catch (error) {
       return sendError(res, 400, 'INVALID_JSON', 'The request body must be a JSON transfer request.');
+    }
+
+    if (request && typeof request === 'object' && 'fromAccountId' in request) {
+      const { fromAccountId, ...rest } = request;
+      request = { ...rest, fromIban: ACCOUNT_IDS.get(fromAccountId) };
     }
 
     const transfer = createTransfer(request);
@@ -102,7 +135,7 @@ async function handle(req, res) {
 const server = http.createServer((req, res) => {
   handle(req, res).catch((err) => {
     console.error(err);
-    sendJson(res, 500, { error: { code: 'INTERNAL_ERROR', message: err.message, stack: err.stack } });
+    sendError(res, 500, 'INTERNAL_ERROR', 'Something went wrong. Please try again later.');
   });
 });
 

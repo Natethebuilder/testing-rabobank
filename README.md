@@ -40,7 +40,14 @@ curl http://localhost:3000/health
 curl http://localhost:3000/ibans/NL91ABNA0417164300
 ```
 
-Set `PORT` to use another port.
+Set `PORT` to use another port. The sanctions screening key is read from the
+`SCREENING_API_KEY` environment variable; it is never stored in the code.
+
+Served by `node server.js`, the console uses the API: `GET /accounts` (masked IBANs and
+an account id), `POST /payee-check` and `POST /transfers`. The account directory with
+holder names (`data/`) stays on the server. Opened as a local file, the console uses
+`data/accounts.js` directly. Unexpected server errors return a generic `INTERNAL_ERROR`
+without details.
 
 API transfer responses and logs mask IBANs and do not include beneficiary names.
 
@@ -68,7 +75,7 @@ src/
 data/
   accounts.js      Woodgrove's own accounts: IBAN → account holder
 console/           the transfer console (index.html, console.js, console.css)
-server.js          optional HTTP API: GET /health, GET /ibans/:iban, POST /transfers
+server.js          optional HTTP API: GET /health, GET /accounts, GET /ibans/:iban, POST /payee-check, POST /transfers
 tests/
   *.test.js        the tests
   harness.js       a tiny test framework (describe, test, expect)
