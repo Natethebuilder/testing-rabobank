@@ -50,12 +50,19 @@ the fee before sending and in the result panel. `createTransfer` returns `feeCen
 `calculateFee(amountCents, instant)` provides the same quote without creating a
 transfer. For invalid amounts, the fee is `null` rather than a quote.
 
+While you type, the console checks the beneficiary name against the account holder
+(Verification of Payee). `verifyPayee(iban, name)` returns `MATCH`, `CLOSE_MATCH`
+(initials or at most 2 typos, with `suggestedName`), `NO_MATCH`, or `NOT_POSSIBLE` for
+IBANs outside Woodgrove. It returns `null` for an empty name or an invalid IBAN. The
+check is advisory and never blocks sending.
+
 ## Project map
 
 ```text
 src/
   iban.js          normalizeIban, isValidIban, formatIban, countryOf, isSepaCountry
   money.js         parseAmount ("1.234,56" → 123456 cents) and formatAmount (123456 → "€ 1.234,56")
+  payee.js         verifyPayee: Verification of Payee for Woodgrove accounts
   transfer.js      validateTransfer and createTransfer
   config.js        transfer limits and service configuration
 data/

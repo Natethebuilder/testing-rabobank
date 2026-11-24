@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const { iban, money, transfer, accounts } = window.Woodgrove;
+  const { iban, money, transfer, accounts, payee } = window.Woodgrove;
   const $ = (id) => document.getElementById(id);
 
   const form = $('transfer-form');
@@ -58,6 +58,20 @@
       hint.textContent = 'This IBAN does not look valid yet.';
       hint.classList.add('warn');
     }
+  }
+
+  function updateNameHint() {
+    const hint = $('name-hint');
+    const check = payee.verifyPayee(fields.toIban.value, fields.beneficiaryName.value);
+    const messages = {
+      MATCH: ['ok', '✅ Name matches'],
+      CLOSE_MATCH: ['warn', `⚠️ Did you mean ${check && check.suggestedName}?`],
+      NO_MATCH: ['bad', "❌ Name doesn't match this account"],
+      NOT_POSSIBLE: ['', 'ℹ️ Name check not possible for this bank'],
+    };
+    const [tone, text] = check ? messages[check.result] : ['', "The name on the beneficiary's account."];
+    hint.className = tone ? `hint ${tone}` : 'hint';
+    hint.textContent = text;
   }
 
   function updateAmountHint() {
@@ -116,12 +130,17 @@
         fields[name].value = example[name];
       });
       updateIbanHint();
+      updateNameHint();
       updateAmountHint();
       updateDescriptionCount();
     });
   });
 
-  fields.toIban.addEventListener('input', updateIbanHint);
+  fields.toIban.addEventListener('input', () => {
+    updateIbanHint();
+    updateNameHint();
+  });
+  fields.beneficiaryName.addEventListener('input', updateNameHint);
   fields.amount.addEventListener('input', updateAmountHint);
   fields.instant.addEventListener('change', updateFeeHint);
   fields.description.addEventListener('input', updateDescriptionCount);
