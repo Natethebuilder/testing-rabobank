@@ -58,7 +58,11 @@ describe('transfer', () => {
     expect(transfer.status).toBe('ACCEPTED');
     expect(transfer.errors).toEqual([]);
     expect(transfer.id).toMatch(/^TRF-20261125-\d{4}$/);
-    expect(transfer.toIban).toBe('FR7630006000011234567890189');
+    expect(transfer.fromIban).toBe('NL****6789');
+    expect(transfer.toIban).toBe('FR****0189');
+    expect(transfer.beneficiaryName).toBeUndefined();
+    expect(JSON.stringify(transfer)).not.toContain('Claire Dubois');
+    expect(JSON.stringify(transfer)).not.toContain('FR7630006000011234567890189');
     expect(transfer.amountCents).toBe(12500);
     expect(transfer.instant).toBe(false);
     expect(transfer.createdAt).toBe('2026-11-25T09:15:00.000Z');
@@ -68,6 +72,24 @@ describe('transfer', () => {
     const first = createTransfer(validRequest());
     const second = createTransfer(validRequest());
     expect(first.id).not.toBe(second.id);
+  });
+
+  test('transfer logs mask IBANs and omit the beneficiary name', () => {
+    const logs = [];
+    const originalLog = console.log;
+    let transfer;
+    console.log = (...args) => logs.push(args.join(' '));
+    try {
+      transfer = createTransfer(validRequest());
+    } finally {
+      console.log = originalLog;
+    }
+
+    expect(logs.join(' ')).toContain('NL****6789 -> FR****0189');
+    expect(logs.join(' ')).not.toContain('NL20WGBK0123456789');
+    expect(logs.join(' ')).not.toContain('FR7630006000011234567890189');
+    expect(logs.join(' ')).not.toContain('Claire Dubois');
+    expect(transfer.beneficiaryName).toBeUndefined();
   });
 
   test('createTransfer rejects an invalid request and lists the errors', () => {

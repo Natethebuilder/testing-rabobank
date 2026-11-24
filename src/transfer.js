@@ -65,9 +65,8 @@
       id: nextId(now),
       status: ok ? 'ACCEPTED' : 'REJECTED',
       errors,
-      fromIban: iban.normalizeIban(request.fromIban),
-      toIban: iban.normalizeIban(request.toIban),
-      beneficiaryName: String(request.beneficiaryName || '').trim(),
+      fromIban: iban.maskIban(request.fromIban),
+      toIban: iban.maskIban(request.toIban),
       amountCents: request.amountCents,
       description: String(request.description || ''),
       instant: request.instant === true,
@@ -75,8 +74,8 @@
     };
 
     console.log(
-      `[transfers] ${transfer.id} ${transfer.status}: ${transfer.fromIban} -> ${transfer.toIban} ` +
-        `(${transfer.beneficiaryName}), ${transfer.amountCents} cents`
+      `[transfers] ${transfer.id} ${transfer.status}: ${transfer.fromIban} -> ${transfer.toIban}, ` +
+        `${transfer.amountCents} cents`
     );
 
     return transfer;

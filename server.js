@@ -70,9 +70,10 @@ async function handle(req, res) {
   if (req.method === 'GET' && pathname.startsWith('/ibans/')) {
     const value = decodeURIComponent(pathname.slice('/ibans/'.length));
     const country = iban.countryOf(value);
+    const maskedIban = iban.maskIban(value);
     return sendJson(res, 200, {
-      iban: iban.normalizeIban(value),
-      formatted: iban.formatIban(value),
+      iban: maskedIban,
+      formatted: iban.formatIban(maskedIban),
       valid: iban.isValidIban(value),
       country,
       sepa: iban.isSepaCountry(country),

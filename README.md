@@ -42,6 +42,8 @@ curl http://localhost:3000/ibans/NL91ABNA0417164300
 
 Set `PORT` to use another port.
 
+API transfer responses and logs mask IBANs and do not include beneficiary names.
+
 ## Project map
 
 ```text

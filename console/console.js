@@ -28,7 +28,7 @@
   Object.keys(accounts).forEach((accountIban) => {
     const option = document.createElement('option');
     option.value = accountIban;
-    option.textContent = `${accounts[accountIban]} · ${iban.formatIban(accountIban)}`;
+    option.textContent = iban.maskIban(accountIban);
     fields.fromIban.appendChild(option);
   });
   fields.fromIban.value = 'NL12WGBK0417164300';
@@ -52,7 +52,7 @@
       hint.textContent = "Enter the beneficiary's IBAN.";
     } else if (iban.isValidIban(value)) {
       const country = iban.countryOf(value);
-      hint.textContent = `✓ ${iban.formatIban(value)} · ${country}${iban.isSepaCountry(country) ? ' · SEPA' : ' · outside SEPA'}`;
+      hint.textContent = `✓ ${iban.maskIban(value)} · ${country}${iban.isSepaCountry(country) ? ' · SEPA' : ' · outside SEPA'}`;
       hint.classList.add('ok');
     } else {
       hint.textContent = 'This IBAN does not look valid yet.';
@@ -82,8 +82,8 @@
     $('result-amount').textContent = Number.isInteger(result.amountCents) ? money.formatAmount(result.amountCents) : '€ –';
 
     $('result-summary').innerHTML = `
-      <dt>To</dt><dd>${result.beneficiaryName || '–'}<br><span class="mono">${iban.formatIban(result.toIban) || '–'}</span></dd>
-      <dt>From</dt><dd class="mono">${iban.formatIban(result.fromIban)}</dd>
+      <dt>To</dt><dd class="mono">${result.toIban || '–'}</dd>
+      <dt>From</dt><dd class="mono">${result.fromIban || '–'}</dd>
       <dt>Description</dt><dd>${result.description || '–'}</dd>
       <dt>Speed</dt><dd>${result.instant ? 'Instant' : 'Standard (next business day)'}</dd>
       <dt>Created</dt><dd>${new Date(result.createdAt).toLocaleString('en-GB')}</dd>`;
