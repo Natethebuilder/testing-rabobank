@@ -64,6 +64,14 @@
     const cents = money.parseAmount(fields.amount.value);
     const hint = $('amount-hint');
     hint.textContent = Number.isInteger(cents) ? money.formatAmount(cents) : 'For example 1.234,56';
+    updateFeeHint();
+  }
+
+  function updateFeeHint() {
+    const feeCents = transfer.calculateFee(money.parseAmount(fields.amount.value), fields.instant.checked);
+    $('fee-hint').textContent = feeCents === null
+      ? 'Enter a valid amount to see the fee.'
+      : `Fee: ${money.formatAmount(feeCents)}`;
   }
 
   function updateDescriptionCount() {
@@ -86,6 +94,7 @@
       <dt>From</dt><dd class="mono">${result.fromIban || '–'}</dd>
       <dt>Description</dt><dd>${result.description || '–'}</dd>
       <dt>Speed</dt><dd>${result.instant ? 'Instant' : 'Standard (next business day)'}</dd>
+      <dt>Fee</dt><dd>${result.feeCents === null ? 'Not available (invalid amount)' : money.formatAmount(result.feeCents)}</dd>
       <dt>Created</dt><dd>${new Date(result.createdAt).toLocaleString('en-GB')}</dd>`;
 
     $('result-errors').innerHTML = result.errors
@@ -114,5 +123,7 @@
 
   fields.toIban.addEventListener('input', updateIbanHint);
   fields.amount.addEventListener('input', updateAmountHint);
+  fields.instant.addEventListener('change', updateFeeHint);
   fields.description.addEventListener('input', updateDescriptionCount);
+  updateFeeHint();
 })();

@@ -1,5 +1,5 @@
 describe('transfer', () => {
-  const { validateTransfer, createTransfer } = Woodgrove.transfer;
+  const { calculateFee, validateTransfer, createTransfer } = Woodgrove.transfer;
 
   const validRequest = () => ({
     fromIban: 'NL20WGBK0123456789',
@@ -90,6 +90,46 @@ describe('transfer', () => {
     expect(logs.join(' ')).not.toContain('FR7630006000011234567890189');
     expect(logs.join(' ')).not.toContain('Claire Dubois');
     expect(transfer.beneficiaryName).toBeUndefined();
+  });
+
+  for (const [amountCents, instant, feeCents] of [
+    [10000, true, 20],
+    [123456, true, 123],
+    [1000000, true, 250],
+    [50000, false, 0],
+    [123499, true, 123],
+    [123500, true, 124],
+    [1, true, 20],
+    [20499, true, 20],
+    [20500, true, 21],
+    [249499, true, 249],
+    [249500, true, 250],
+  ]) {
+    test(`quotes and creates a ${feeCents}-cent fee for ${amountCents} cents (${instant ? 'instant' : 'standard'})`, () => {
+      expect(calculateFee(amountCents, instant)).toBe(feeCents);
+      const result = createTransfer({ ...validRequest(), amountCents, instant });
+      expect(result.status).toBe('ACCEPTED');
+      expect(result.feeCents).toBe(feeCents);
+    });
+  }
+
+  test('only an explicit instant flag incurs a fee', () => {
+    for (const instant of [undefined, 'true', 1]) {
+      const result = createTransfer({ ...validRequest(), amountCents: 123500, instant });
+      expect(result.instant).toBe(false);
+      expect(result.feeCents).toBe(0);
+      expect(calculateFee(123500, instant)).toBe(0);
+    }
+  });
+
+  test('invalid amounts have no fee quote and are rejected', () => {
+    for (const amountCents of [undefined, NaN, Infinity, 0, -100, 12.5, '12500', Number.MAX_SAFE_INTEGER + 1]) {
+      expect(calculateFee(amountCents, true)).toBeNull();
+      const result = createTransfer({ ...validRequest(), amountCents, instant: true });
+      expect(result.status).toBe('REJECTED');
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.feeCents).toBeNull();
+    }
   });
 
   test('createTransfer rejects an invalid request and lists the errors', () => {

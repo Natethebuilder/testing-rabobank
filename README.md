@@ -44,6 +44,12 @@ Set `PORT` to use another port.
 
 API transfer responses and logs mask IBANs and do not include beneficiary names.
 
+Standard transfers are free. Instant transfers cost 0.1% of the amount, rounded half up
+to whole cents, with a minimum of € 0,20 and a maximum of € 2,50. The console shows
+the fee before sending and in the result panel. `createTransfer` returns `feeCents`;
+`calculateFee(amountCents, instant)` provides the same quote without creating a
+transfer. For invalid amounts, the fee is `null` rather than a quote.
+
 ## Project map
 
 ```text
