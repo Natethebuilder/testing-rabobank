@@ -40,7 +40,28 @@ curl http://localhost:3000/health
 curl http://localhost:3000/ibans/NL91ABNA0417164300
 ```
 
-Set `PORT` to use another port.
+Set `PORT` to use another port. The sanctions screening key is read from the
+`SCREENING_API_KEY` environment variable; it is never stored in the code.
+
+Served by `node server.js`, the console uses the API: `GET /accounts` (masked IBANs and
+an account id), `POST /payee-check` and `POST /transfers`. The account directory with
+holder names (`data/`) stays on the server. Opened as a local file, the console uses
+`data/accounts.js` directly. Unexpected server errors return a generic `INTERNAL_ERROR`
+without details.
+
+API transfer responses and logs mask IBANs and do not include beneficiary names.
+
+Standard transfers are free. Instant transfers cost 0.1% of the amount, rounded half up
+to whole cents, with a minimum of € 0,20 and a maximum of € 2,50. The console shows
+the fee before sending and in the result panel. `createTransfer` returns `feeCents`;
+`calculateFee(amountCents, instant)` provides the same quote without creating a
+transfer. For invalid amounts, the fee is `null` rather than a quote.
+
+While you type, the console checks the beneficiary name against the account holder
+(Verification of Payee). `verifyPayee(iban, name)` returns `MATCH`, `CLOSE_MATCH`
+(initials or at most 2 typos, with `suggestedName`), `NO_MATCH`, or `NOT_POSSIBLE` for
+IBANs outside Woodgrove. It returns `null` for an empty name or an invalid IBAN. The
+check is advisory and never blocks sending.
 
 ## Project map
 
@@ -48,12 +69,13 @@ Set `PORT` to use another port.
 src/
   iban.js          normalizeIban, isValidIban, formatIban, countryOf, isSepaCountry
   money.js         parseAmount ("1.234,56" → 123456 cents) and formatAmount (123456 → "€ 1.234,56")
+  payee.js         verifyPayee: Verification of Payee for Woodgrove accounts
   transfer.js      validateTransfer and createTransfer
   config.js        transfer limits and service configuration
 data/
   accounts.js      Woodgrove's own accounts: IBAN → account holder
 console/           the transfer console (index.html, console.js, console.css)
-server.js          optional HTTP API: GET /health, GET /ibans/:iban, POST /transfers
+server.js          optional HTTP API: GET /health, GET /accounts, GET /ibans/:iban, POST /payee-check, POST /transfers
 tests/
   *.test.js        the tests
   harness.js       a tiny test framework (describe, test, expect)

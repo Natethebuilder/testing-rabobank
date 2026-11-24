@@ -4,8 +4,17 @@
 (function () {
   'use strict';
 
-  const { iban, money, transfer, accounts } = window.Woodgrove;
+  const { iban, money, transfer, accounts, payee } = window.Woodgrove;
   const $ = (id) => document.getElementById(id);
+
+  // Served by server.js, the account directory stays on the server and the console uses the API.
+  // Opened as a local file, it uses data/accounts.js directly.
+  const useApi = !accounts;
+  const DEFAULT_FROM = 'NL12WGBK0417164300';
+
+  const postJson = (url, body) =>
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then((response) => response.json());
 
   const form = $('transfer-form');
   const fields = {
@@ -25,17 +34,29 @@
   };
 
   // Fill the "From" list with Woodgrove's own accounts.
-  Object.keys(accounts).forEach((accountIban) => {
+  function addFromOption(value, label) {
     const option = document.createElement('option');
-    option.value = accountIban;
-    option.textContent = `${accounts[accountIban]} · ${iban.formatIban(accountIban)}`;
+    option.value = value;
+    option.textContent = label;
     fields.fromIban.appendChild(option);
-  });
-  fields.fromIban.value = 'NL12WGBK0417164300';
+  }
+
+  if (useApi) {
+    fetch('/accounts')
+      .then((response) => response.json())
+      .then((list) => {
+        list.forEach((account) => addFromOption(account.id, account.iban));
+        const preferred = list.find((account) => account.iban === iban.maskIban(DEFAULT_FROM));
+        if (preferred) fields.fromIban.value = preferred.id;
+      });
+  } else {
+    Object.keys(accounts).forEach((accountIban) => addFromOption(accountIban, iban.maskIban(accountIban)));
+    fields.fromIban.value = DEFAULT_FROM;
+  }
 
   function readRequest() {
     return {
-      fromIban: fields.fromIban.value,
+      [useApi ? 'fromAccountId' : 'fromIban']: fields.fromIban.value,
       toIban: fields.toIban.value,
       beneficiaryName: fields.beneficiaryName.value,
       amountCents: money.parseAmount(fields.amount.value),
@@ -52,7 +73,7 @@
       hint.textContent = "Enter the beneficiary's IBAN.";
     } else if (iban.isValidIban(value)) {
       const country = iban.countryOf(value);
-      hint.textContent = `✓ ${iban.formatIban(value)} · ${country}${iban.isSepaCountry(country) ? ' · SEPA' : ' · outside SEPA'}`;
+      hint.textContent = `✓ ${iban.maskIban(value)} · ${country}${iban.isSepaCountry(country) ? ' · SEPA' : ' · outside SEPA'}`;
       hint.classList.add('ok');
     } else {
       hint.textContent = 'This IBAN does not look valid yet.';
@@ -60,10 +81,50 @@
     }
   }
 
+  let nameCheckSequence = 0;
+
+  function showNameCheck(check) {
+    const hint = $('name-hint');
+    const messages = {
+      MATCH: ['ok', '✅ Name matches'],
+      CLOSE_MATCH: ['warn', `⚠️ Did you mean ${check && check.suggestedName}?`],
+      NO_MATCH: ['bad', "❌ Name doesn't match this account"],
+      NOT_POSSIBLE: ['', 'ℹ️ Name check not possible for this bank'],
+    };
+    const [tone, text] = check ? messages[check.result] : ['', "The name on the beneficiary's account."];
+    hint.className = tone ? `hint ${tone}` : 'hint';
+    hint.textContent = text;
+  }
+
+  function updateNameHint() {
+    const toIban = fields.toIban.value;
+    const name = fields.beneficiaryName.value;
+    if (!useApi) return showNameCheck(payee.verifyPayee(toIban, name));
+
+    // Only the latest answer counts, so a slow reply never overwrites a newer one.
+    const sequence = ++nameCheckSequence;
+    if (!name.trim() || !iban.isValidIban(toIban)) return showNameCheck(null);
+    postJson('/payee-check', { iban: toIban, name })
+      .then((body) => {
+        if (sequence === nameCheckSequence) showNameCheck(body.check);
+      })
+      .catch(() => {
+        if (sequence === nameCheckSequence) showNameCheck(null);
+      });
+  }
+
   function updateAmountHint() {
     const cents = money.parseAmount(fields.amount.value);
     const hint = $('amount-hint');
     hint.textContent = Number.isInteger(cents) ? money.formatAmount(cents) : 'For example 1.234,56';
+    updateFeeHint();
+  }
+
+  function updateFeeHint() {
+    const feeCents = transfer.calculateFee(money.parseAmount(fields.amount.value), fields.instant.checked);
+    $('fee-hint').textContent = feeCents === null
+      ? 'Enter a valid amount to see the fee.'
+      : `Fee: ${money.formatAmount(feeCents)}`;
   }
 
   function updateDescriptionCount() {
@@ -82,10 +143,11 @@
     $('result-amount').textContent = Number.isInteger(result.amountCents) ? money.formatAmount(result.amountCents) : '€ –';
 
     $('result-summary').innerHTML = `
-      <dt>To</dt><dd>${result.beneficiaryName || '–'}<br><span class="mono">${iban.formatIban(result.toIban) || '–'}</span></dd>
-      <dt>From</dt><dd class="mono">${iban.formatIban(result.fromIban)}</dd>
+      <dt>To</dt><dd class="mono">${result.toIban || '–'}</dd>
+      <dt>From</dt><dd class="mono">${result.fromIban || '–'}</dd>
       <dt>Description</dt><dd>${result.description || '–'}</dd>
       <dt>Speed</dt><dd>${result.instant ? 'Instant' : 'Standard (next business day)'}</dd>
+      <dt>Fee</dt><dd>${result.feeCents === null ? 'Not available (invalid amount)' : money.formatAmount(result.feeCents)}</dd>
       <dt>Created</dt><dd>${new Date(result.createdAt).toLocaleString('en-GB')}</dd>`;
 
     $('result-errors').innerHTML = result.errors
@@ -97,7 +159,11 @@
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    render(transfer.createTransfer(readRequest()));
+    if (useApi) {
+      postJson('/transfers', readRequest()).then(render);
+    } else {
+      render(transfer.createTransfer(readRequest()));
+    }
   });
 
   document.querySelectorAll('[data-example]').forEach((button) => {
@@ -107,12 +173,19 @@
         fields[name].value = example[name];
       });
       updateIbanHint();
+      updateNameHint();
       updateAmountHint();
       updateDescriptionCount();
     });
   });
 
-  fields.toIban.addEventListener('input', updateIbanHint);
+  fields.toIban.addEventListener('input', () => {
+    updateIbanHint();
+    updateNameHint();
+  });
+  fields.beneficiaryName.addEventListener('input', updateNameHint);
   fields.amount.addEventListener('input', updateAmountHint);
+  fields.instant.addEventListener('change', updateFeeHint);
   fields.description.addEventListener('input', updateDescriptionCount);
+  updateFeeHint();
 })();

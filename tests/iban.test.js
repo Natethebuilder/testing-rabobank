@@ -23,6 +23,14 @@ describe('iban', () => {
     expect(isValidIban('FR7630006000011234567890189')).toBe(true);
   });
 
+  test('isValidIban accepts the French IBAN reported in WGB-101', () => {
+    expect(isValidIban('FR14 2004 1010 0505 0001 3M02 606')).toBe(true);
+  });
+
+  test('isValidIban accepts the Italian IBAN reported in WGB-101', () => {
+    expect(isValidIban('IT21 A030 6909 6061 0000 0063 789')).toBe(true);
+  });
+
   test('isValidIban accepts spaces and lowercase letters', () => {
     expect(isValidIban('nl91 abna 0417 1643 00')).toBe(true);
   });
@@ -30,6 +38,8 @@ describe('iban', () => {
   test('isValidIban rejects wrong check digits', () => {
     expect(isValidIban('NL92ABNA0417164300')).toBe(false);
     expect(isValidIban('DE88370400440532013000')).toBe(false);
+    expect(isValidIban('FR15 2004 1010 0505 0001 3M02 606')).toBe(false);
+    expect(isValidIban('IT22 A030 6909 6061 0000 0063 789')).toBe(false);
   });
 
   test('isValidIban rejects a typo in the account number', () => {

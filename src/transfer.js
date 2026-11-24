@@ -19,6 +19,13 @@
 
   let sequence = 0;
 
+  /** Quote the fee in cents, or null when the amount is not a positive, safe integer. */
+  function calculateFee(amountCents, instant = false) {
+    if (!Number.isSafeInteger(amountCents) || amountCents <= 0) return null;
+    if (instant !== true) return 0;
+    return Math.min(250, Math.max(20, Math.floor((amountCents + 500) / 1000)));
+  }
+
   /** Check a transfer request. Returns { ok, errors } where each error is { code, message }. */
   function validateTransfer(req) {
     const request = req || {};
@@ -65,18 +72,18 @@
       id: nextId(now),
       status: ok ? 'ACCEPTED' : 'REJECTED',
       errors,
-      fromIban: iban.normalizeIban(request.fromIban),
-      toIban: iban.normalizeIban(request.toIban),
-      beneficiaryName: String(request.beneficiaryName || '').trim(),
+      fromIban: iban.maskIban(request.fromIban),
+      toIban: iban.maskIban(request.toIban),
       amountCents: request.amountCents,
+      feeCents: calculateFee(request.amountCents, request.instant),
       description: String(request.description || ''),
       instant: request.instant === true,
       createdAt: now.toISOString(),
     };
 
     console.log(
-      `[transfers] ${transfer.id} ${transfer.status}: ${transfer.fromIban} -> ${transfer.toIban} ` +
-        `(${transfer.beneficiaryName}), ${transfer.amountCents} cents`
+      `[transfers] ${transfer.id} ${transfer.status}: ${transfer.fromIban} -> ${transfer.toIban}, ` +
+        `${transfer.amountCents} cents`
     );
 
     return transfer;
@@ -90,6 +97,7 @@
   }
 
   return {
+    calculateFee,
     validateTransfer,
     createTransfer,
   };
